@@ -1,44 +1,44 @@
-services:
-  app:
-    image: fireflyiii/core:latest
-    hostname: app
-    container_name: firefly_iii_core
-    restart: always
-    volumes:
-      - firefly_iii_upload:/var/www/html/storage/upload
-    env_file: .env
-    networks:
-      - firefly_iii
-    ports:
-      - 80:8080
-    depends_on:
-      - db
-  db:
-    image: mariadb:lts
-    hostname: db
-    container_name: firefly_iii_db
-    restart: always
-    env_file: .db.env
-    networks:
-      - firefly_iii
-    volumes:
-      - firefly_iii_db:/var/lib/mysql
-  cron:
-    #
-    # To make this work, set STATIC_CRON_TOKEN in your .env file or as an environment variable and replace REPLACEME below
-    # The STATIC_CRON_TOKEN must be *exactly* 32 characters long
-    #
-    image: alpine
-    restart: always
-    container_name: firefly_iii_cron
-    command: sh -c "echo \"0 3 * * * wget -qO- http://app:8080/api/v1/cron/REPLACEME\" | crontab - && crond -f -L /dev/stdout"
-    networks:
-      - firefly_iii
+ARG build_platform
+ARG build_base
+ARG build_root_image
+FROM $build_root_image:$build_base-$build_platform
 
-volumes:
-   firefly_iii_upload:
-   firefly_iii_db:
+ARG version
+ENV VERSION=$version
 
-networks:
-  firefly_iii:
-    driver: bridge
+ARG isodate
+ENV ISODATE=$isodate
+
+ARG gitrevision
+ENV GITREVISION=$gitrevision
+
+
+# static labels
+LABEL org.opencontainers.image.authors="James Cole <james@firefly-iii.org>" org.opencontainers.image.url="https://github.com/firefly-iii/docker" org.opencontainers.image.documentation="https://docs.firefly-iii.org/" org.opencontainers.image.source="https://dev.azure.com/Firefly-III/_git/MainImage" org.opencontainers.image.vendor="James Cole <james@firefly-iii.org>" org.opencontainers.image.licenses="AGPL-3.0-or-later" org.opencontainers.image.title="Firefly III" org.opencontainers.image.description="Firefly III - personal finance manager" org.opencontainers.image.base.name="docker.io/fireflyiii/base:apache-8.3"
+
+# dynamic labels
+
+LABEL org.opencontainers.image.created="${ISODATE}"
+LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.revision="${GITREVISION}"
+
+# For more information about fireflyiii/base visit https://dev.azure.com/firefly-iii/BaseImage
+
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY counter.txt /var/www/counter-main.txt
+COPY date.txt /var/www/build-date-main.txt
+
+#
+# This assumes that download.zip is in the current directory
+# you may have to download it manually first.
+#
+
+COPY download.zip /var/www/download.zip
+
+RUN unzip -q /var/www/download.zip -d $FIREFLY_III_PATH && \
+	chmod -R 775 $FIREFLY_III_PATH/storage && \
+	/usr/local/bin/finalize-image.sh
+
+COPY alerts.json /var/www/html/resources/alerts.json
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
